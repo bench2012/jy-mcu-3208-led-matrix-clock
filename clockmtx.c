@@ -8,23 +8,23 @@
 
 // ScottJ 
 
-#define HOUR12 1
+//#define HOUR12 1
 
-#define F_CPU 1000000
+#define F_CPU 16000000
 
 #include <avr/pgmspace.h>
 #include <avr/io.h>
 #include <util/delay.h>
 #include <avr/interrupt.h>
 #include <avr/sleep.h>
-//#include <avr/eeprom.h>
+#include <avr/eeprom.h>
 
 #define byte uint8_t
 #define word uint16_t
 
 
 
-PROGMEM byte bigdigits[10][6] = {
+static const byte bigdigits[10][6]  PROGMEM  = {
 
   {126,129,129,129,129,126}, // 0
 
@@ -149,12 +149,15 @@ void HTbrightness(byte b) {
 
 
 volatile byte sec=5;
+volatile byte sixty_sec=0;
+
 byte sec0=200, minute, hour, day, month; word year;
 
 
 inline void clocksetup() {  // CLOCK, interrupt every second
-  ASSR |= (1<<AS2);    //timer2 async from external quartz
-  TCCR2=0b00000101;    //normal,off,/128; 32768Hz/256/128 = 1 Hz
+  //ASSR |= (1<<AS2);    //timer2 async from external quartz
+  TCCR2 |= (1 << CS22)|(1 << CS21)|(1<<CS20);    //normal,off,/1024; 16MHz/256/1024 = 61 Hz
+  TCNT2 = 0;  // initialize counter
   TIMSK |= (1<<TOIE2); //enable timer2-overflow-int
   sei();               //enable interrupts
 }
@@ -162,7 +165,7 @@ inline void clocksetup() {  // CLOCK, interrupt every second
 
 // CLOCK interrupt
 ISR(TIMER2_OVF_vect) {     //timer2-overflow-int
-  sec++;
+  sixty_sec++;
 }
 
 
@@ -197,6 +200,7 @@ void decsec(byte sub) {
 }
 
 byte clockhandler(void) {
+    
   if (sec==sec0) return 0;   //check if something changed
   sec0=sec;
   incsec(0);  //just carry over
@@ -233,9 +237,9 @@ byte hr = hour;
 
   // flash colon every 2 seconds
   // 0x66 = 01100110
-  //if (sec%2) {leds[col++]=0x66;leds[col++]=0x66;} else {leds[col++]=0; leds[col++]=0;}
+  if (sec%2) {leds[col++]=0x66;leds[col++]=0x66;} else {leds[col++]=0; leds[col++]=0;}
   // 0x24 = 0010 0100
-  if (sec%2) {leds[col++]=0x00;leds[col++]=0x24;} else {leds[col++]=0; leds[col++]=0;}  //SAJ  smaller colon: 0x24 
+  //if (sec%2) {leds[col++]=0x00;leds[col++]=0x24;} else {leds[col++]=0; leds[col++]=0;}  //SAJ  smaller colon: 0x24 
   leds[col++]=0;
 
   for (byte i=0;i<6;i++) leds[col++]=pgm_read_byte(&bigdigits[minute/10][i]);  // MI 10th digit
@@ -245,10 +249,10 @@ byte hr = hour;
   leds[col++]=0;
 
   // progressive bar second indicator
-  //leds[col++]=(sec>6) +((sec>13)<<1) +((sec>20)<<2) +((sec>26)<<3) +((sec>33)<<4) +((sec>40)<<5) +((sec>46)<<6) +((sec>53)<<7);
+  leds[col++]=(sec>6) +((sec>13)<<1) +((sec>20)<<2) +((sec>26)<<3) +((sec>33)<<4) +((sec>40)<<5) +((sec>46)<<6) +((sec>53)<<7);
 
   // scrolling dot second indicator
-  leds[col++]= (1<<(sec/8));
+  //leds[col++]= (1<<(sec/8));
 }
 
 
@@ -273,7 +277,10 @@ int main(void) {  //============================================================
     else if (key3) {if (changing>250) decsec(20); else {changing++; decsec(1);} }
     else if (key1) {if (!changing) {changing=1; bright=(bright+1)%4; HTbrightness(brights[bright]);} } //only once per press
     else changing=0;
-
+    if (sixty_sec>=61) {
+      sixty_sec=0;
+      sec++;
+   }
     if(clockhandler()) { renderclock(); HTsendscreen(); }
   }
   return(0);
