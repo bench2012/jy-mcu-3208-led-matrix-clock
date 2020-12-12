@@ -53,7 +53,7 @@ static const byte bigdigits[12][6]  PROGMEM  = {
 
   {0x46,0x89,0x89,0x89,0x89,0x7e}, // 9
 
-  {0x00,0x06,0x09,0x09,0x06,0x00},  // Degree
+  {0x00,0x00,0x06,0x09,0x09,0x06},  // Degree
 
   {0x00,0x7e,0x81,0x81,0x81,0x66}   // C
 };
@@ -107,7 +107,7 @@ byte leds[32];  //the screen array, 1 byte = 1 column, left to right, lsb at top
 
 #define temp 24
 #define ds_sec 5
-#define temp_ds 2
+#define temp_ds 20
 
 void HTsend(word data, byte bits) {  //MSB first
   word bit=((word)1)<<(bits-1);
@@ -157,6 +157,7 @@ void HTbrightness(byte b) {
 volatile byte sec=5;
 volatile byte sixty_sec=0;
 volatile byte tempsec=0;
+volatile byte temp_cs=temp_ds;
 
 byte sec0=200, minute, hour, day, month; word year;
 
@@ -216,11 +217,13 @@ byte clockhandler(void) {
 
 byte temphandler(void) {
     
-  if (minute%temp_ds!=0) {
+  if (temp_cs!=0) { //Check if Temp display time interval reached
+    --temp_cs; //Dec. Temp display time interval
     return 0;
   }     //check if something changed
   else{
-    tempsec=ds_sec;
+    tempsec=ds_sec; //Set Temp display time
+    temp_cs=temp_ds; //Reset Temp display time interval
     return 1;
   }
 
@@ -231,8 +234,11 @@ void rendertemp(void) {
 
 byte tmp = temp;
 
+  for (byte i=0;i<6;i++) leds[col++]=0; //Blank Char
+  
+  for (byte i=0;i<6;i++) leds[col++]=0; //Blank Char
+ 
   for (byte i=0;i<6;i++) leds[col++]=pgm_read_byte(&bigdigits[tmp/10][i]);   // Temperature 10th digit
-
   leds[col++]=0;
 
   for (byte i=0;i<6;i++) leds[col++]=pgm_read_byte(&bigdigits[tmp%10][i]);   // Temperature  1st digit
@@ -320,19 +326,19 @@ int main(void) {  //============================================================
       sixty_sec=0;
       sec++;
    }
-    if (clockhandler()) {
-
-      if (tempsec==0) {
+    if (clockhandler()) { //Time update check
+      
+      temphandler();
+      if (tempsec==0) { //Check if Temp display time is reach
         renderclock(); 
         HTsendscreen(); 
         } 
       else {
-        --tempsec;
+        --tempsec; //Dec Time display time
         rendertemp(); 
         HTsendscreen();
         }
     }  
-    temphandler();
   }
   return(0);
 }//main
