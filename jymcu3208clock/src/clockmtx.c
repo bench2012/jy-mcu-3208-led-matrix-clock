@@ -149,7 +149,7 @@ void HTsetup() {  //setting up the display
 
 void HTbrightness(byte b) {
   HTcommand(HTsetbright + ((b&15)<<1) );
-}\
+}
 
 //------------------------------------------------------------------------------------- CLOCK ------------------
 
