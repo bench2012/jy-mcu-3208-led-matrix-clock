@@ -24,7 +24,7 @@
 
 
 
-static const byte bigdigits[10][6]  PROGMEM  = {
+static const byte bigdigits[12][6]  PROGMEM  = {
 
   {126,129,129,129,129,126}, // 0
 
@@ -52,6 +52,10 @@ static const byte bigdigits[10][6]  PROGMEM  = {
   {0x76,0x89,0x89,0x89,0x89,0x76}, // 8
 
   {0x46,0x89,0x89,0x89,0x89,0x7e}, // 9
+
+  {0x00,0x06,0x09,0x09,0x06,0x00},  // Degree
+
+  {0x00,0x7e,0x81,0x81,0x81,0x66}   // C
 };
 
 
@@ -101,7 +105,7 @@ byte leds[32];  //the screen array, 1 byte = 1 column, left to right, lsb at top
 //commands can be queued: 100-ccccccccc-ccccccccc-ccccccccc-... (ccccccccc: without 100 at front)
 //setup: cast startsys, setclock, setlayout, ledon, brightness+(15<<1), blinkoff
 
-
+#define temp 24
 
 void HTsend(word data, byte bits) {  //MSB first
   word bit=((word)1)<<(bits-1);
@@ -143,7 +147,7 @@ void HTsetup() {  //setting up the display
 
 void HTbrightness(byte b) {
   HTcommand(HTsetbright + ((b&15)<<1) );
-}
+}\
 
 //------------------------------------------------------------------------------------- CLOCK ------------------
 
@@ -207,6 +211,32 @@ byte clockhandler(void) {
   return 1;
 }
 
+byte temphandler(void) {
+    
+  if (sec=30) return 1;   //check if something changed
+  return 0;
+}
+//-------------------------------------------------------------------------------------- temperature render ----------
+void rendertemp(void) {
+  byte col=0;
+
+byte tmp = temp;
+
+  for (byte i=0;i<6;i++) leds[col++]=pgm_read_byte(&bigdigits[tmp/10][i]);   // Temperature 10th digit
+
+  leds[col++]=0;
+
+  for (byte i=0;i<6;i++) leds[col++]=pgm_read_byte(&bigdigits[tmp%10][i]);   // Temperature  1st digit
+  leds[col++]=0;
+
+  for (byte i=0;i<6;i++) leds[col++]=pgm_read_byte(&bigdigits[11][i]);  // Degree 
+  leds[col++]=0;
+
+  for (byte i=0;i<6;i++) leds[col++]=pgm_read_byte(&bigdigits[12][i]);  // C
+  leds[col++]=0;
+
+
+}
 //-------------------------------------------------------------------------------------- clock render ----------
 
 void renderclock(void) {
@@ -281,7 +311,16 @@ int main(void) {  //============================================================
       sixty_sec=0;
       sec++;
    }
-    if(clockhandler()) { renderclock(); HTsendscreen(); }
+    if(clockhandler() && !temphandler()) { 
+      renderclock(); 
+    // rendertemp(); 
+      HTsendscreen(); 
+    }
+    else {
+      rendertemp(); 
+      HTsendscreen();
+    }
+
   }
   return(0);
 }//main
