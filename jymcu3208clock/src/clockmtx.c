@@ -234,10 +234,8 @@ void rendertemp(void) {
 
 byte tmp = temp;
 
-  for (byte i=0;i<6;i++) leds[col++]=0; //Blank Char
+  for (byte i=0;i<12;i++) leds[col++]=0; //Blank Char
   
-  for (byte i=0;i<6;i++) leds[col++]=0; //Blank Char
- 
   for (byte i=0;i<6;i++) leds[col++]=pgm_read_byte(&bigdigits[tmp/10][i]);   // Temperature 10th digit
   leds[col++]=0;
 
