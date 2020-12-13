@@ -53,7 +53,8 @@ static const byte bigdigits[12][6]  PROGMEM  = {
 
   {0x46,0x89,0x89,0x89,0x89,0x7e}, // 9
 
-  {0x00,0x00,0x06,0x09,0x09,0x06},  // Degree
+  //{0x00,0x00,0x06,0x09,0x09,0x06},  // Degree
+  {0x00, 0x06, 0x09, 0x09, 0x06, 0x00}, // Degree
 
   {0x00,0x7e,0x81,0x81,0x81,0x66}   // C
 };
@@ -105,9 +106,10 @@ byte leds[32];  //the screen array, 1 byte = 1 column, left to right, lsb at top
 //commands can be queued: 100-ccccccccc-ccccccccc-ccccccccc-... (ccccccccc: without 100 at front)
 //setup: cast startsys, setclock, setlayout, ledon, brightness+(15<<1), blinkoff
 
-#define temp 24
-#define ds_sec 5
-#define temp_ds 20
+//Temperature read and display time
+//#define temp 24
+#define ds_sec 2 //Temp display time (sec)
+#define temp_ds 300 //Temp display interval (sec)
 
 void HTsend(word data, byte bits) {  //MSB first
   word bit=((word)1)<<(bits-1);
@@ -126,6 +128,7 @@ void HTcommand(word data) {
 }
 
 void HTsendscreen(void) {
+  cli();
   HTstrobe0;
   HTsend(HTwrite,10);
   for (byte mtx=0;mtx<4;mtx++)  //sending 8x8-matrices left to right, rows top to bottom, MSB left
@@ -135,6 +138,7 @@ void HTsendscreen(void) {
       HTsend(q,8);
     }
   HTstrobe1;
+  sei();
 }
 
 
@@ -156,8 +160,8 @@ void HTbrightness(byte b) {
 
 volatile byte sec=5;
 volatile byte sixty_sec=0;
-volatile byte tempsec=0;
-volatile byte temp_cs=temp_ds;
+
+
 
 byte sec0=200, minute, hour, day, month; word year;
 
@@ -173,7 +177,9 @@ inline void clocksetup() {  // CLOCK, interrupt every second
 
 // CLOCK interrupt
 ISR(TIMER2_OVF_vect) {     //timer2-overflow-int
+cli();
   sixty_sec++;
+sei();
 }
 
 
@@ -215,6 +221,26 @@ byte clockhandler(void) {
   return 1;
 }
 
+//------------------------------------------------------------------------------------- TEMPERATURE ------------------
+
+volatile byte tempsec=0;
+volatile byte temp_cs=temp_ds;
+int temp;
+
+int ReadADC(uint8_t ch) {
+  ADMUX&=0xF0; ADMUX|=ch;// MUX values needed to be changed to use ch
+  ADCSRA |= (1<<ADSC); // Start A2D Conversions 
+  while(!(ADCSRA&(1<<ADIF)));  // Check the ADIF bit for ADC conversion completes
+  ADCSRA|=(1<<ADIF); //Reset if complete
+  _delay_ms(1); //Wait a bit (1ms)
+  return(ADC); //and return ADC value for LM35
+}
+
+void initADC() {
+  ADMUX=(1<<REFS0);// Set ADC reference to AVCC
+  ADCSRA=((1<<ADEN)|(1<<ADFR)|(1<<ADPS2)|(1<<ADPS1)|(1<<ADPS0));//ADC Enable,Free runninng, pre-scale=128 (125KHz sampling for 16MHz clock)
+}
+
 byte temphandler(void) {
     
   if (temp_cs!=0) { //Check if Temp display time interval reached
@@ -222,6 +248,8 @@ byte temphandler(void) {
     return 0;
   }     //check if something changed
   else{
+    temp=ReadADC(2); //Read LM35 at ADC2
+    temp=temp/2.01; //Convert since 5.1mV and for 1 degree C and 2 units of ADC = 1 degree (10bit)
     tempsec=ds_sec; //Set Temp display time
     temp_cs=temp_ds; //Reset Temp display time interval
     return 1;
@@ -232,11 +260,11 @@ byte temphandler(void) {
 void rendertemp(void) {
   byte col=0;
 
-byte tmp = temp;
+int tmp = temp;
 
-  for (byte i=0;i<6;i++) leds[col++]=0; //Blank Char
-  
-  for (byte i=0;i<6;i++) leds[col++]=0; //Blank Char
+ // for (byte i=0;i<6;i++) leds[col++]=0; //Blank Char
+ cli(); 
+  for (byte i=0;i<4;i++) leds[col++]=0; //Blank Char
  
   for (byte i=0;i<6;i++) leds[col++]=pgm_read_byte(&bigdigits[tmp/10][i]);   // Temperature 10th digit
   leds[col++]=0;
@@ -244,12 +272,12 @@ byte tmp = temp;
   for (byte i=0;i<6;i++) leds[col++]=pgm_read_byte(&bigdigits[tmp%10][i]);   // Temperature  1st digit
   leds[col++]=0;
 
-  for (byte i=0;i<6;i++) leds[col++]=pgm_read_byte(&bigdigits[11][i]);  // Degree 
-  leds[col++]=0;
+  for (byte i=0;i<6;i++) leds[col++]=pgm_read_byte(&bigdigits[10][i]);  // Degree 
+  //leds[col++]=0;
 
-  for (byte i=0;i<6;i++) leds[col++]=pgm_read_byte(&bigdigits[12][i]);  // C
+  for (byte i=0;i<6;i++) leds[col++]=pgm_read_byte(&bigdigits[11][i]);  // C
   leds[col++]=0;
-
+sei();
 
 }
 //-------------------------------------------------------------------------------------- clock render ----------
@@ -310,6 +338,7 @@ int main(void) {  //============================================================
   HTpinsetup();
   HTsetup();
   keysetup();
+  initADC();
   clocksetup();
 
   for (byte i=0;i<32;i++) leds[i]=0b01010101<<(i%2);  HTsendscreen();
@@ -327,7 +356,6 @@ int main(void) {  //============================================================
       sec++;
    }
     if (clockhandler()) { //Time update check
-      
       temphandler();
       if (tempsec==0) { //Check if Temp display time is reach
         renderclock(); 
@@ -338,6 +366,8 @@ int main(void) {  //============================================================
         rendertemp(); 
         HTsendscreen();
         }
+       // temp=ReadADC(2);
+       // temp=temp/2;
     }  
   }
   return(0);
