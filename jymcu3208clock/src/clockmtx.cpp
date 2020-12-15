@@ -39,13 +39,13 @@ const byte ySize = 8;
 //Temperature read and display time
 //#define temp 24
 #define ds_sec 2 //Temp display time (sec)
-#define temp_ds 10 //Temp display interval (sec)
+#define temp_ds 20 //Temp display interval (sec)
 
 
 //------------------------------------------------------------------------------------- CLOCK ------------------
 
 
-volatile byte sec=5;
+volatile byte sec=0;
 volatile byte sixty_sec=0;
 
 
@@ -163,17 +163,20 @@ void renderclock(void) {
     
   int current_time;  
   current_time=(hour*100)+minute;
+  //current_time=sec;
   LEDmatrix.clear();
+  //LEDmatrix.writeChar(18,(((current_time%100)/10))+192,6);
+  //LEDmatrix.writeChar(26,(current_time%10)+192,6);
   LEDmatrix.writeChar(0,((current_time%10000))/1000+192,6);
   LEDmatrix.writeChar(8,((current_time%1000))/100+192,6);
   LEDmatrix.writeChar(18,(((current_time%100)/10))+192,6);
   LEDmatrix.writeChar(26,(current_time%10)+192,6);
  
   if (sec%2==0) { //flash dot on even and odd sec.
-    LEDmatrix.writeChar(15,58,2); //Chnage to : for sec. indicator
+    LEDmatrix.writeChar(14,58,4); //Chnage to : for sec. indicator
   }
   else {
-    LEDmatrix.writeChar(15,32,2); 
+    LEDmatrix.writeChar(14,00,4); 
   }
   LEDmatrix.render(); // This updates the display on the screen.
 
@@ -220,7 +223,7 @@ void loop() {  //===============================================================
      if (sixty_sec>=61) {
       sixty_sec=0;
       sec++;
-      } 
+     }
     if (clockhandler()) { //Time update check
        
       temphandler();
