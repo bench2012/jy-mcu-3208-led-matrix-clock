@@ -18,6 +18,7 @@
 #include <avr/interrupt.h>
 #include <avr/sleep.h>
 #include <avr/eeprom.h>
+#include <Month.h>
 #include <HT1632.h>
 HT1632Class LEDmatrix;
 
@@ -51,7 +52,7 @@ volatile byte sixty_sec=0;
 
 
 
-byte sec0=200, minute, hour, day, month; word year;
+byte sec0=200, minute, hour, day=21, month=5; word year=2020;
 
 
 inline void clocksetup() {  // CLOCK, interrupt every second
@@ -163,24 +164,59 @@ void renderclock(void) {
     
   int current_time;  
   current_time=(hour*100)+minute;
-  //current_time=sec;
   LEDmatrix.clear();
-  //LEDmatrix.writeChar(18,(((current_time%100)/10))+192,6);
-  //LEDmatrix.writeChar(26,(current_time%10)+192,6);
   LEDmatrix.writeChar(0,((current_time%10000))/1000+192,6);
-  LEDmatrix.writeChar(8,((current_time%1000))/100+192,6);
-  LEDmatrix.writeChar(18,(((current_time%100)/10))+192,6);
+  LEDmatrix.writeChar(7,((current_time%1000))/100+192,6);
+  LEDmatrix.writeChar(19,(((current_time%100)/10))+192,6);
   LEDmatrix.writeChar(26,(current_time%10)+192,6);
  
   if (sec%2==0) { //flash dot on even and odd sec.
-    LEDmatrix.writeChar(14,58,4); //Chnage to : for sec. indicator
+    LEDmatrix.writeChar(13,58,4); //Chnage to : for sec. indicator
   }
   else {
-    LEDmatrix.writeChar(14,00,4); 
+    LEDmatrix.writeChar(13,00,4); 
   }
   LEDmatrix.render(); // This updates the display on the screen.
 
 }
+
+void renderdate(void) {
+    
+  char dy[4];
+  char mth[4];
+  int day_unit;
+  dy[0]=((day%100)/10)+192;
+  dy[1]=(day%10)+192;
+  day_unit=day%10;
+  if (day_unit==0){
+    dy[2]=116;// t
+    dy[3]=104;// h
+    }
+    else if (day_unit==1) {
+    dy[2]=115;// s
+    dy[3]=116;// t    
+    }
+    else if (day_unit==2) {
+    dy[2]=110;// n
+    dy[3]=100;// d    
+    }
+    else if (day_unit==3) {
+    dy[2]=114;// r
+    dy[3]=100;// d    
+    }
+  
+  LEDmatrix.clear();
+  LEDmatrix.printString(dy);
+  delay(1000);
+  LEDmatrix.clear();
+    strcpy_P(mth,(char*)pgm_read_byte(&(wrd_mth[month-1])));
+    LEDmatrix.printString(mth);
+  delay(1000);
+  LEDmatrix.clear();
+    LEDmatrix.printNum(year,10,false);
+  delay(1000);
+}
+
 
 void setup() {
 
@@ -215,8 +251,8 @@ void loop() {  //===============================================================
         }
         if (!digitalRead(key1)) {
           if (sixty_sec>changing) {
-            bright=(bright+1)%4; 
-            LEDmatrix.setBrightness(brights[bright]);
+            renderdate();
+            
           } 
         } //only once per press
     changing=sixty_sec;
