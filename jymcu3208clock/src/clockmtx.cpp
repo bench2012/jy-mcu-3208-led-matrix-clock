@@ -29,10 +29,10 @@ const byte ySize = 8;
 #define word uint16_t
 
 
-#define key1 ((PIND&(1<<7))==0)
-#define key2 ((PIND&(1<<6))==0)
-#define key3 ((PIND&(1<<5))==0)
-#define keysetup() do{ DDRD&=0xff-(1<<7)-(1<<6)-(1<<5); PORTD|=(1<<7)+(1<<6)+(1<<5); }while(0)  //input, pull up
+#define key1 PIN_PD7
+#define key2 PIN_PD6
+#define key3 PIN_PD5
+
 
 
 
@@ -68,6 +68,7 @@ ISR(TIMER2_OVF_vect) {     //timer2-overflow-int
 cli();
   sixty_sec++;
 sei();
+
 }
 
 
@@ -102,7 +103,8 @@ void decsec(byte sub) {
 }
 
 byte clockhandler(void) {
-    
+
+
   if (sec==sec0) return 0;   //check if something changed
   sec0=sec;
   incsec(0);  //just carry over
@@ -150,8 +152,9 @@ void rendertemp(void) {
 int tmp = temp;
         LEDmatrix.clear();
         LEDmatrix.printChar(3, 'C');
-        LEDmatrix.printChar(2,(tmp%10)+48);
-        LEDmatrix.printChar(1,(tmp/10)+48);
+        LEDmatrix.printChar(2, 248);
+        LEDmatrix.printChar(1,(tmp%10)+192);
+        LEDmatrix.printChar(0,(tmp/10)+192);
         LEDmatrix.render();
 }
 //-------------------------------------------------------------------------------------- clock render ----------
@@ -161,26 +164,18 @@ void renderclock(void) {
   int current_time;  
   current_time=(hour*100)+minute;
   LEDmatrix.clear();
-  LEDmatrix.writeChar(0,(current_time%10000)/1000+48,6);
-  LEDmatrix.writeChar(8,(current_time%1000)/100+48,6);
-  LEDmatrix.writeChar(18,(current_time%100)/10+48,6);
-  LEDmatrix.writeChar(26,(current_time%10)+48,6);
-  //LEDmatrix.render();
-
-  if (sec % 2 ==0) { //flash dot on even and odd sec.
-  //  LEDmatrix.setPixel(14,2);
-    LEDmatrix.setPixel(15,2);
-    LEDmatrix.setPixel(16,2);
-    LEDmatrix.setPixel(15,5);
-    LEDmatrix.setPixel(16,5);
+  LEDmatrix.writeChar(0,((current_time%10000))/1000+192,6);
+  LEDmatrix.writeChar(8,((current_time%1000))/100+192,6);
+  LEDmatrix.writeChar(18,(((current_time%100)/10))+192,6);
+  LEDmatrix.writeChar(26,(current_time%10)+192,6);
+ 
+  if (sec%2==0) { //flash dot on even and odd sec.
+    LEDmatrix.writeChar(15,58,2); //Chnage to : for sec. indicator
   }
   else {
-    LEDmatrix.clearPixel(15,2);
-    LEDmatrix.clearPixel(16,2);   
-    LEDmatrix.clearPixel(15,5);
-    LEDmatrix.clearPixel(16,5);
+    LEDmatrix.writeChar(15,32,2); 
   }
-    LEDmatrix.render(); // This updates the display on the screen.
+  LEDmatrix.render(); // This updates the display on the screen.
 
 }
 
@@ -188,30 +183,46 @@ void setup() {
 
 
   //initialize the display
-    LEDmatrix.begin(PIN_PB3, PIN_PB4, PIN_PB5);  // CS, WR, DATA
+  LEDmatrix.begin(PIN_PB3, PIN_PB4, PIN_PB5);  // CS, WR, DATA
+  pinMode(key1,INPUT_PULLUP);
+  pinMode(key2,INPUT_PULLUP);
+  pinMode(key3,INPUT_PULLUP);
 }
 
 void loop() {  //==================================================================== main ==================
 
-    byte changing, bright=3;
+    byte changing, bright=1;
     byte brights[4]={0,2,6,15}; //brightness levels
     initADC();
     clocksetup();
-    LEDmatrix.setBrightness(1);
+    LEDmatrix.setBrightness(brights[bright]);
 
 
   hour=8;minute=40;
 
   while(1){ 
-     //   if (key2) {if (changing>250) incsec(20); else {changing++; incsec(1);} }
-    //else if (key3) {if (changing>250) decsec(20); else {changing++; decsec(1);} }
-    //else if (key1) {if (!changing) {changing=1; bright=(bright+1)%4; LEDmatrix.setBrightness(brights[bright]);} } //only once per press
-    //else changing=0;
-    if (sixty_sec>=61) {
+        if (!digitalRead(key2)) {
+          if (sixty_sec>changing) incsec(20); 
+          else incsec(1); 
+        }
+          else 
+        if (!digitalRead(key3)) {
+          if (sixty_sec>changing) decsec(20); 
+          else decsec(1); 
+        }
+        if (!digitalRead(key1)) {
+          if (sixty_sec>changing) {
+            bright=(bright+1)%4; 
+            LEDmatrix.setBrightness(brights[bright]);
+          } 
+        } //only once per press
+    changing=sixty_sec;
+     if (sixty_sec>=61) {
       sixty_sec=0;
       sec++;
-   }
+      } 
     if (clockhandler()) { //Time update check
+       
       temphandler();
       if (tempsec==0) { //Check if Temp display time is reach
         renderclock(); 
@@ -220,6 +231,6 @@ void loop() {  //===============================================================
         --tempsec; //Dec Time display time
         rendertemp(); 
         }
-    }  
+    }
   }
-}//main
+} //main
