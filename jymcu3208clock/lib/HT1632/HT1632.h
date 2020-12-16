@@ -52,7 +52,7 @@
 //*************************
 // custom font for JY-MCU
 
-#include "cp437alt_font.h"
+#include "cp437alt_font_big.h"
 //#include "cp437font.h"
 //#define BIGNUM_OFFSET (0xC0)
 

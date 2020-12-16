@@ -35,12 +35,10 @@ const byte ySize = 8;
 #define key3 PIN_PD5
 
 
-
-
 //Temperature read and display time
 //#define temp 24
 #define ds_sec 2 //Temp display time (sec)
-#define temp_ds 20 //Temp display interval (sec)
+#define temp_ds 5 //Temp display interval (sec)
 
 
 //------------------------------------------------------------------------------------- CLOCK ------------------
@@ -52,7 +50,7 @@ volatile byte sixty_sec=0;
 
 
 
-byte sec0=200, minute, hour, day=21, month=5; word year=2020;
+int sec0=200, minute, hour, day=21, month=5; word year=2020;
 
 
 inline void clocksetup() {  // CLOCK, interrupt every second
@@ -71,8 +69,6 @@ cli();
 sei();
 
 }
-
-
 
 void incsec(byte add) {
   sec+=add;
@@ -119,11 +115,14 @@ volatile byte temp_cs=temp_ds;
 int temp;
 
 int ReadADC(uint8_t ch) {
+int time_now = 0;
+int length = 30;
   ADMUX&=0xF0; ADMUX|=ch;// MUX values needed to be changed to use ch
   ADCSRA |= (1<<ADSC); // Start A2D Conversions 
   while(!(ADCSRA&(1<<ADIF)));  // Check the ADIF bit for ADC conversion completes
   ADCSRA|=(1<<ADIF); //Reset if complete
-  _delay_ms(1); //Wait a bit (1ms)
+  time_now=sixty_sec;
+  while (sixty_sec<=time_now+length){}; //delay length/61 sec
   return(ADC); //and return ADC value for LM35
 }
 
@@ -140,7 +139,7 @@ byte temphandler(void) {
   }     //check if something changed
   else{
     temp=ReadADC(2); //Read LM35 at ADC2
-    temp=temp/2.01; //Convert since 5.1mV and for 1 degree C and 2 units of ADC = 1 degree (10bit)
+    temp=temp/4.02; //Convert since 5.1mV and for 1 degree C and 2 units of ADC = 1 degree (10bit)
     tempsec=ds_sec; //Set Temp display time
     temp_cs=temp_ds; //Reset Temp display time interval
     return 1;
@@ -153,9 +152,9 @@ void rendertemp(void) {
 int tmp = temp;
         LEDmatrix.clear();
         LEDmatrix.printChar(3, 'C');
-        LEDmatrix.printChar(2, 248);
-        LEDmatrix.printChar(1,(tmp%10)+192);
-        LEDmatrix.printChar(0,(tmp/10)+192);
+        LEDmatrix.printChar(2, 1);
+        LEDmatrix.writeChar(3,(tmp%10)+48,6);
+        LEDmatrix.writeChar(11,(tmp/10)+48,6);
         LEDmatrix.render();
 }
 //-------------------------------------------------------------------------------------- clock render ----------
@@ -165,10 +164,10 @@ void renderclock(void) {
   int current_time;  
   current_time=(hour*100)+minute;
   LEDmatrix.clear();
-  LEDmatrix.writeChar(0,((current_time%10000))/1000+192,6);
-  LEDmatrix.writeChar(7,((current_time%1000))/100+192,6);
-  LEDmatrix.writeChar(19,(((current_time%100)/10))+192,6);
-  LEDmatrix.writeChar(26,(current_time%10)+192,6);
+  LEDmatrix.writeChar(0,((current_time%10000))/1000+48,6);
+  LEDmatrix.writeChar(7,((current_time%1000))/100+48,6);
+  LEDmatrix.writeChar(19,(((current_time%100)/10))+48,6);
+  LEDmatrix.writeChar(26,(current_time%10)+48,6);
  
   if (sec%2==0) { //flash dot on even and odd sec.
     LEDmatrix.writeChar(13,58,4); //Chnage to : for sec. indicator
@@ -181,12 +180,15 @@ void renderclock(void) {
 }
 
 void renderdate(void) {
+
+  int period = 10; //Display period in 61th sec 
+  int time_now = 0;
     
   char dy[4];
   char mth[4];
   int day_unit;
-  dy[0]=((day%100)/10)+192;
-  dy[1]=(day%10)+192;
+  dy[0]=((day%100)/10)+48;
+  dy[1]=(day%10)+48;
   day_unit=day%10;
   if (day_unit==0){
     dy[2]=116;// t
@@ -207,16 +209,18 @@ void renderdate(void) {
   
   LEDmatrix.clear();
   LEDmatrix.printString(dy);
-  delay(1000);
-  LEDmatrix.clear();
-    strcpy_P(mth,(char*)pgm_read_byte(&(wrd_mth[month-1])));
-    LEDmatrix.printString(mth);
-  delay(1000);
-  LEDmatrix.clear();
-    LEDmatrix.printNum(year,10,false);
-  delay(1000);
+  time_now = sixty_sec;
+  while(sixty_sec < time_now + period){} ;
+  //LEDmatrix.clear();
+  strcpy_P(mth,(char*)pgm_read_byte(&(wrd_mth[month-1])));
+  LEDmatrix.printString(mth);
+  time_now = sixty_sec; 
+  while(sixty_sec < time_now + period){} ;
+  //LEDmatrix.clear();
+  time_now = sixty_sec;
+  while(sixty_sec < time_now + period){} ;
+  LEDmatrix.printNum(year,10,false);
 }
-
 
 void setup() {
 
@@ -232,6 +236,7 @@ void loop() {  //===============================================================
 
     byte changing, bright=1;
     byte brights[4]={0,2,6,15}; //brightness levels
+    //int time_now=0;
     initADC();
     clocksetup();
     LEDmatrix.setBrightness(brights[bright]);
